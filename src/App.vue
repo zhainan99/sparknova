@@ -1,15 +1,36 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onUnmounted, nextTick } from "vue";
+import { listen } from "@tauri-apps/api/event";
+import { getCurrent } from "@tauri-apps/api/webviewWindow";
 import { invoke } from "@tauri-apps/api/core";
 
 const searchInput = ref("");
 const inputRef = ref<HTMLInputElement | null>(null);
 
 // 组件挂载后自动聚焦输入框
-onMounted(async () => {
-  // 稍延迟聚焦，确保窗口完全显示
-  setTimeout(() => {
+const win = getCurrent();
+const customUnlistenPromise = listen("spark_focus_input", () => {
+  nextTick().then(() => {
     inputRef.value?.focus();
+  });
+});
+const focusUnlistenPromise = win.listen("tauri://focus", () => {
+  nextTick().then(() => {
+    inputRef.value?.focus();
+  });
+});
+
+onUnmounted(() => {
+  customUnlistenPromise.then((fn) => fn());
+  focusUnlistenPromise.then((fn) => fn());
+});
+
+onMounted(() => {
+  // 初次挂载后延迟聚焦
+  setTimeout(() => {
+    nextTick().then(() => {
+      inputRef.value?.focus();
+    });
   }, 150);
 });
 
@@ -24,7 +45,7 @@ function handleSearch() {
 // Esc 键隐藏窗口
 function handleEscape() {
   searchInput.value = "";
-  invoke("open_or_focus_main_window");
+  invoke("hide_main_window");
 }
 </script>
 
@@ -90,7 +111,8 @@ function handleEscape() {
 }
 
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
 }
 
 body {
