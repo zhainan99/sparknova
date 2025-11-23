@@ -21,14 +21,28 @@
         "transparent": true,
         "alwaysOnTop": true,
         "skipTaskbar": true,
-        "visible": false
+        "visible": false,
+        "shadow": false,
+        "fullscreen": false,
+        "maximized": false,
+        "visibleOnAllWorkspaces": true,
+        "focus": true,
+        "acceptFirstMouse": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; connect-src 'self' ws: http: https:; font-src 'self';",
+      "devCsp": null
     }
   },
-  "plugins": {},
+  "plugins": {
+    "shell": {
+      "all": false,
+      "execute": true,
+      "sidecar": true,
+      "open": true
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
