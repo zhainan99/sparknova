@@ -35,14 +35,14 @@
   }
 
   .search-input-container {
-    /* 精确匹配后端配置的600px宽度 */
-    width: 600px;
+    /* 宽度由后端根据屏幕分辨率动态计算 */
+    width: 100%;
     /* 确保容器不会超出视口 */
     max-width: 90vw;
   }
 
   .search-input {
-    /* 精确匹配后端配置的600px宽度和80px高度 */
+    /* 宽度占满容器，高度固定为80px */
     width: 100%;
     height: 80px;
     font-size: 18px;

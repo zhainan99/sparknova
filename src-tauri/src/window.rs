@@ -55,6 +55,44 @@ pub fn get_main_window(app: &AppHandle) -> Option<WebviewWindow> {
     window
 }
 
+/// 获取当前屏幕的分辨率
+///
+/// 参数：`window` 窗口实例
+/// 返回：(宽度, 高度) 或 `None`
+/// 示例：`if let Some((width, height)) = get_screen_resolution(&window) { ... }`
+pub fn get_screen_resolution(window: &WebviewWindow) -> Option<(u32, u32)> {
+    if let Some(monitor) = window.current_monitor().ok()? {
+        let size = monitor.size();
+        println!(
+            "[Window] Current screen resolution: {}x{}",
+            size.width, size.height
+        );
+        Some((size.width, size.height))
+    } else {
+        println!("[Window] Failed to get current monitor");
+        None
+    }
+}
+
+/// 根据屏幕分辨率计算合适的窗口大小
+///
+/// 参数：`screen_width` 屏幕宽度、`screen_height` 屏幕高度
+/// 返回：(窗口宽度, 窗口高度)
+/// 示例：`let (window_width, window_height) = calculate_window_size(1920, 1080);`
+pub fn calculate_window_size(screen_width: u32, screen_height: u32) -> (u32, u32) {
+    // 计算窗口宽度为屏幕宽度的75%，但不小于400px，不大于800px
+    let window_width = (screen_width as f64 * 0.75).clamp(400.0, 960.0) as u32;
+    // 保持窗口高度为80px（根据当前设计）
+    let window_height = 80;
+
+    println!(
+        "[Window] Calculated window size: {}x{} for screen {}x{}",
+        window_width, window_height, screen_width, screen_height
+    );
+
+    (window_width, window_height)
+}
+
 /// 显示并聚焦主窗口
 ///
 /// 参数：`app` 应用句柄、`ctrl` 控制器状态
@@ -63,6 +101,17 @@ pub fn get_main_window(app: &AppHandle) -> Option<WebviewWindow> {
 pub fn show_main_window(app: &AppHandle, _ctrl: &WindowController) -> bool {
     if let Some(window) = get_main_window(app) {
         println!("[Window] Showing main window");
+
+        // 根据屏幕分辨率动态调整窗口大小
+        if let Some((screen_width, screen_height)) = get_screen_resolution(&window) {
+            let (window_width, window_height) = calculate_window_size(screen_width, screen_height);
+
+            let resize_result = window.set_size(tauri::PhysicalSize {
+                width: window_width,
+                height: window_height,
+            });
+            println!("[Window] Resize result: {:?}", resize_result);
+        }
 
         let result = window.show();
         println!("[Window] Show result: {:?}", result);
@@ -137,6 +186,7 @@ pub fn toggle_main_window(app: &AppHandle, ctrl: &WindowController) {
 /// ```text
 /// [setup]
 ///   -> hide main initially
+///   -> set initial window size based on screen resolution
 ///   -> on Focused(false):
 ///        if now - last_show_time > BLUR_HIDE_DELAY_MS => hide
 ///        else => ignore
@@ -145,24 +195,77 @@ pub fn init_window_events(app_handle: &AppHandle, ctrl: State<WindowController>)
     let app = app_handle.clone();
     let ctrl_clone = ctrl.inner().clone();
 
-    // 初始隐藏主窗口
+    // 初始隐藏主窗口并设置初始大小
     if let Some(window) = get_main_window(&app_handle) {
         println!("[Window] Initializing window events, hiding main window initially");
+
+        // 根据屏幕分辨率设置初始窗口大小
+        if let Some((screen_width, screen_height)) = get_screen_resolution(&window) {
+            let (window_width, window_height) = calculate_window_size(screen_width, screen_height);
+
+            let resize_result = window.set_size(tauri::PhysicalSize {
+                width: window_width,
+                height: window_height,
+            });
+            println!("[Window] Initial resize result: {:?}", resize_result);
+        }
+
         let _ = window.hide();
+
+        // 在闭包外克隆窗口
+        let window_clone = window.clone();
 
         // 监听窗口事件
         window.on_window_event(move |event| {
-            if let tauri::WindowEvent::Focused(focused) = event {
-                if !focused {
-                    println!("[Window] Window lost focus");
-                    // 检查是否超过失焦隐藏延迟
-                    if ctrl_clone.should_hide_on_blur() {
-                        println!("[Window] Blur delay exceeded, hiding window");
-                        hide_main_window(&app);
+            match event {
+                tauri::WindowEvent::Focused(focused) => {
+                    if !focused {
+                        println!("[Window] Window lost focus");
+                        // 检查是否超过失焦隐藏延迟
+                        if ctrl_clone.should_hide_on_blur() {
+                            println!("[Window] Blur delay exceeded, hiding window");
+                            hide_main_window(&app);
+                        } else {
+                            println!("[Window] Within blur protection period, ignoring hide");
+                        }
                     } else {
-                        println!("[Window] Within blur protection period, ignoring hide");
+                        // 当窗口获得焦点时，根据当前屏幕分辨率调整窗口大小
+                        println!("[Window] Window focused, checking screen resolution");
+                        let window_clone2 = window_clone.clone();
+
+                        if let Some((screen_width, screen_height)) =
+                            get_screen_resolution(&window_clone2)
+                        {
+                            let (window_width, window_height) =
+                                calculate_window_size(screen_width, screen_height);
+
+                            let resize_result = window_clone2.set_size(tauri::PhysicalSize {
+                                width: window_width,
+                                height: window_height,
+                            });
+                            println!("[Window] Resize on focus result: {:?}", resize_result);
+                        }
                     }
                 }
+                tauri::WindowEvent::Moved(_) => {
+                    // 当窗口移动时，根据当前屏幕分辨率调整窗口大小
+                    println!("[Window] Window moved, checking screen resolution");
+                    let window_clone2 = window_clone.clone();
+
+                    if let Some((screen_width, screen_height)) =
+                        get_screen_resolution(&window_clone2)
+                    {
+                        let (window_width, window_height) =
+                            calculate_window_size(screen_width, screen_height);
+
+                        let resize_result = window_clone2.set_size(tauri::PhysicalSize {
+                            width: window_width,
+                            height: window_height,
+                        });
+                        println!("[Window] Resize on move result: {:?}", resize_result);
+                    }
+                }
+                _ => {}
             }
         });
     } else {
