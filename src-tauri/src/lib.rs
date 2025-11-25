@@ -25,20 +25,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use tauri::{App, AppHandle, Manager, State};
- 
 
 mod window;
-use window::{WindowController, init_window_events, register_global_shortcuts, toggle_main_window, hide_main_window_internal};
- 
-
- 
-
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! SparkNova greets from Rust!", name)
-}
-
- 
+use window::{init_window_events, register_global_shortcuts, toggle_main_window, WindowController};
 
 #[tauri::command]
 fn open_or_focus_main_window(app: AppHandle, ctrl: State<WindowController>) {
@@ -49,26 +38,18 @@ fn open_or_focus_main_window(app: AppHandle, ctrl: State<WindowController>) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::Builder::default().build())
-        .invoke_handler(tauri::generate_handler![greet, open_or_focus_main_window, hide_main_window])
+        .invoke_handler(tauri::generate_handler![open_or_focus_main_window])
         .setup(|app: &mut App| {
-            let app_handle = app.handle().clone();
             app.manage(WindowController::new());
-            init_window_events(&app_handle, app.state::<WindowController>().inner());
+            println!("[Setup] Registering global shortcuts...");
             register_global_shortcuts(app)?;
-            
-            
-            
+
+            println!("[Setup] Initializing window events...");
+            let ctrl = app.state::<WindowController>();
+            init_window_events(app.handle(), ctrl);
+
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-
-#[tauri::command]
-fn hide_main_window(app: AppHandle) {
-    if hide_main_window_internal(&app) {
-        println!("Hiding window via command");
-    }
-}
-
- 
