@@ -24,14 +24,16 @@
 // src-tauri/src/lib.rs
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::{App, AppHandle, Manager, State};
+use tauri::{App, AppHandle, Manager};
+use tracing::info;
+use tracing_subscriber::{fmt, EnvFilter};
 
 mod window;
-use window::{init_window_events, register_global_shortcuts, toggle_main_window, WindowController};
+use window::{register_global_shortcuts, toggle_main_window};
 
 #[tauri::command]
-fn open_or_focus_main_window(app: AppHandle, ctrl: State<WindowController>) {
-    toggle_main_window(&app, ctrl.inner())
+fn open_or_focus_main_window(app: AppHandle) {
+    toggle_main_window(&app)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point())]
@@ -40,13 +42,22 @@ pub fn run() {
         .plugin(tauri_plugin_opener::Builder::default().build())
         .invoke_handler(tauri::generate_handler![open_or_focus_main_window])
         .setup(|app: &mut App| {
-            app.manage(WindowController::new());
-            println!("[Setup] Registering global shortcuts...");
+            let _ = fmt()
+                .with_env_filter(
+                    EnvFilter::from_default_env().add_directive("info".parse().unwrap()),
+                )
+                .with_target(false)
+                .compact()
+                .try_init();
+            info!("Registering global shortcuts...");
             register_global_shortcuts(app)?;
 
-            println!("[Setup] Initializing window events...");
-            let ctrl = app.state::<WindowController>();
-            init_window_events(app.handle(), ctrl);
+            #[cfg(debug_assertions)]
+            {
+                if let Some(_win) = app.get_webview_window("main") {
+                    // let _ = win.open_devtools();
+                }
+            }
 
             Ok(())
         })
