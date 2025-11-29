@@ -9,6 +9,7 @@
     "core:window:default",
     "core:window:allow-set-focus",
     "core:window:allow-is-visible",
+    "core:webview:allow-set-webview-focus",
     "opener:default",
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",

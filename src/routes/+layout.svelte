@@ -17,12 +17,14 @@
   :global(html),
   :global(body) {
     font-family:
-      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
       Cantarell, sans-serif;
     background: transparent;
     overflow: hidden;
     width: 100%;
     height: 100%;
+    margin: 0;
+    padding: 0;
   }
 
   /* 确保根容器不出现滚动条 */

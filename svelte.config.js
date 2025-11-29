@@ -4,6 +4,10 @@ import adapter from '@sveltejs/adapter-static';
 export default {
   preprocess: vitePreprocess(),
   kit: {
-    adapter: adapter()
+    adapter: adapter(),
+    alias: {
+      $utils: './src/utils',
+      $compoments: './src/components'
+    }
   }
 };
