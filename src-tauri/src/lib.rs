@@ -31,6 +31,8 @@ use tracing_subscriber::{fmt, EnvFilter};
 mod window;
 
 // Nimbus core modules
+mod commands;
+
 mod paths;
 mod domain;
 mod search;
@@ -60,6 +62,9 @@ pub fn run() {
                 .try_init();
             info!("Registering global shortcuts...");
             register_global_shortcuts(app)?;
+
+            // 注册搜索命令
+            commands::search::register(app)?;
 
             #[cfg(debug_assertions)]
             {
