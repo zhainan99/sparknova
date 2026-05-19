@@ -1,5 +1,4 @@
 //! 索引构建层：扫描系统、产出 [`crate::domain::AppEntry`] 列表。
-//! 对应 Spring Boot 的 Repository 写端。
 //!
 //! 规划（参见 docs/design.md §4.1 应用来源分层）：
 //! - `app_scanner`   v0.1 —— 开始菜单 `.lnk` + 注册表 Uninstall
@@ -9,7 +8,3 @@
 mod app_scanner;
 mod directory_scanner;
 mod registry_scanner;
-
-pub use app_scanner::scan_start_menu;
-pub use directory_scanner::scan_user_dirs;
-pub use registry_scanner::scan_registry;

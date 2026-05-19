@@ -85,6 +85,7 @@ impl Storage {
     }
 
     /// 获取频次存储访问器。
+    #[allow(dead_code)]
     pub fn frequency(&self) -> FrequencyStore {
         FrequencyStore::new(self.db.clone())
     }
@@ -106,6 +107,7 @@ impl Storage {
     }
 
     /// 获取 SQLite 数据库引用（用于 Config 等模块直接访问）。
+    #[allow(dead_code)]
     pub fn sqlite(&self) -> &SqliteDb {
         &self.sqlite
     }

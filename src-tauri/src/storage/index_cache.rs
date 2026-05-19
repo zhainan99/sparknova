@@ -1,8 +1,6 @@
 //! 应用索引缓存：存储扫描到的应用列表，实现冷启动秒加载。
-//!
-//! 表结构：
-//! - key: "index_snapshot"（固定键）
-//! - value: 序列化后的应用列表（JSON）
+
+#![allow(dead_code)]
 
 use std::sync::Arc;
 
@@ -13,10 +11,8 @@ use tracing::info;
 
 use crate::domain::{AppEntry, AppSource};
 
-/// 索引缓存表定义。
 const INDEX_CACHE: TableDefinition<&str, &str> = TableDefinition::new("index_cache");
 
-/// 序列化后的应用条目（用于存储）。
 #[derive(Serialize, Deserialize)]
 struct SerializedEntry {
     name: String,
@@ -24,20 +20,15 @@ struct SerializedEntry {
     source: AppSource,
 }
 
-/// 索引缓存访问器。
-///
-/// 使用 `Arc<Database>` 共享数据库引用，避免悬垂指针。
 pub struct IndexCache {
     db: Arc<Database>,
 }
 
 impl IndexCache {
-    /// 创建新的索引缓存访问器。
     pub fn new(db: Arc<Database>) -> Self {
         Self { db }
     }
 
-    /// 初始化索引缓存表（仅在首次运行时创建，已有则跳过）。
     pub fn init_table(db: &Database) -> Result<()> {
         let exists = db
             .begin_read()
@@ -57,7 +48,6 @@ impl IndexCache {
         Ok(())
     }
 
-    /// 保存索引快照。
     pub fn save(&self, entries: &[AppEntry]) -> Result<()> {
         let serialized: Vec<SerializedEntry> = entries
             .iter()
@@ -83,12 +73,8 @@ impl IndexCache {
         Ok(())
     }
 
-    /// 追加单个条目到索引缓存（Layer 3 "用过即学"）。
-    ///
-    /// 加载现有条目、追加、再保存。索引量级小（~500 条），全量重写开销可忽略。
     pub fn append(&self, entry: &AppEntry) -> Result<()> {
         let mut entries = self.load().unwrap_or_default();
-        // 去重：同路径已存在则跳过
         if entries.iter().any(|e| e.path == entry.path) {
             return Ok(());
         }
@@ -96,9 +82,6 @@ impl IndexCache {
         self.save(&entries)
     }
 
-    /// 加载索引快照。
-    ///
-    /// 如果缓存不存在或解析失败，返回空列表。
     pub fn load(&self) -> Result<Vec<AppEntry>> {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(INDEX_CACHE)?;
@@ -131,11 +114,10 @@ mod tests {
     use redb::Database;
     use std::fs;
 
-    /// 创建临时数据库，返回 (cache, temp_dir)。
     fn temp_db() -> (IndexCache, std::path::PathBuf) {
         let temp_dir = std::env::temp_dir().join(format!(
             "nimbus_cache_test_{:?}_{:?}",
-            std::thread::current().id(),
+            std::thread::current::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()

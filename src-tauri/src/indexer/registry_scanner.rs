@@ -1,9 +1,6 @@
 //! 注册表 Uninstall 扫描器：读取 Windows 注册表中的已安装应用信息。
-//!
-//! 扫描以下注册表路径：
-//! - HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall
-//! - HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall
-//! - HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall
+
+#![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
 
@@ -72,7 +69,6 @@ fn scan_hive(hive: winreg::HKEY, path: &str, report: &mut RegistryReport) -> any
             }
         };
 
-        // 跳过 Windows Update 等系统组件
         let is_system_component: u32 = subkey.get_value("SystemComponent").unwrap_or(0);
         if is_system_component != 0 {
             report.skipped += 1;
@@ -87,13 +83,11 @@ fn scan_hive(hive: winreg::HKEY, path: &str, report: &mut RegistryReport) -> any
             }
         };
 
-        // 跳过空名称
         if display_name.trim().is_empty() {
             report.skipped += 1;
             continue;
         }
 
-        // 尝试获取 exe 路径
         let path = resolve_exe_path(&subkey);
 
         if let Some(ref exe_path) = path {
@@ -116,10 +110,7 @@ fn scan_hive(hive: winreg::HKEY, path: &str, report: &mut RegistryReport) -> any
     Ok(())
 }
 
-/// 从注册表子键解析 exe 路径。
-/// 优先使用 DisplayIcon，其次是 InstallLocation + DisplayName 推断。
 fn resolve_exe_path(subkey: &RegKey) -> Option<PathBuf> {
-    // 1. 尝试 DisplayIcon（通常就是 exe 路径）
     if let Ok(icon) = subkey.get_value::<String, _>("DisplayIcon") {
         let icon_path = PathBuf::from(icon.split(',').next().unwrap_or(&icon).trim());
         if icon_path.extension().is_some() {
@@ -127,7 +118,6 @@ fn resolve_exe_path(subkey: &RegKey) -> Option<PathBuf> {
         }
     }
 
-    // 2. 尝试从 UninstallString 推断（排除卸载器路径）
     if let Ok(uninstall) = subkey.get_value::<String, _>("UninstallString") {
         let path = PathBuf::from(uninstall.trim_matches('"'));
         if path.exists() && !is_uninstaller_path(&path) {
@@ -135,11 +125,9 @@ fn resolve_exe_path(subkey: &RegKey) -> Option<PathBuf> {
         }
     }
 
-    // 3. 尝试 InstallLocation
     if let Ok(location) = subkey.get_value::<String, _>("InstallLocation") {
         let location = PathBuf::from(location.trim());
         if location.is_dir() {
-            // 尝试查找目录下的 .exe
             if let Ok(entries) = std::fs::read_dir(&location) {
                 for entry in entries.flatten() {
                     let path = entry.path();
@@ -159,8 +147,6 @@ fn resolve_exe_path(subkey: &RegKey) -> Option<PathBuf> {
     None
 }
 
-/// 检查路径是否指向卸载器（而非实际应用程序）。
-/// Windows 卸载器常见文件名：uninstall.exe, unins000.exe, unwise.exe 等。
 fn is_uninstaller_path(path: &Path) -> bool {
     path.file_stem()
         .and_then(|s| s.to_str())
@@ -180,13 +166,10 @@ mod tests {
 
     #[test]
     fn scan_registry_smoke_test() {
-        // 在 CI 环境可能没有注册表访问权限，所以只验证不 panic
         let result = scan_registry();
         assert!(result.is_ok());
 
         let report = result.unwrap();
-        // 正常的 Windows 系统应该有一些已安装应用
-        // 但不强制要求数量，因为测试环境可能很干净
         assert!(report.scanned_keys > 0 || report.entries.is_empty());
     }
 }

@@ -1,12 +1,6 @@
 //! 用户自定义目录扫描器：递归扫描用户配置的目录，收集 `.exe` 文件。
-//!
-//! 对应 docs/design.md §4.1 Layer 2：覆盖绿色软件/便携版应用。
-//!
-//! 过滤规则（同 §4.1）：
-//! - 仅 `.exe` 扩展名
-//! - 文件名黑名单（安装器/卸载器特征）
-//! - 排除系统目录
-//! - 体积下限 100 KB（过滤 stub）
+
+#![allow(dead_code)]
 
 use anyhow::Result;
 use std::path::{Path, PathBuf};
@@ -55,8 +49,6 @@ pub struct ScanReport {
 }
 
 /// 扫描用户自定义目录列表，返回收集到的应用条目。
-///
-/// 每个目录独立处理，一个目录的失败不影响其他目录。
 pub fn scan_user_dirs(dirs: &[PathBuf]) -> Result<ScanReport> {
     let mut report = ScanReport::default();
 
@@ -138,9 +130,7 @@ fn scan_dir(dir: &Path, depth: u32, report: &mut ScanReport) {
     }
 }
 
-/// 检查 `.exe` 是否应被过滤。
 fn should_skip_exe(path: &Path) -> bool {
-    // 体积检查
     if let Ok(meta) = fs::metadata(path) {
         if meta.len() < MIN_SIZE_BYTES {
             debug!(?path, size = meta.len(), "体积过小，跳过");
@@ -148,7 +138,6 @@ fn should_skip_exe(path: &Path) -> bool {
         }
     }
 
-    // 文件名黑名单检查
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
     let lower = stem.to_lowercase();
     for prefix in NAME_BLACKLIST_PREFIXES {

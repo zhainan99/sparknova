@@ -1,5 +1,5 @@
 use tauri::AppHandle;
-use crate::config::{UserConfig, THEME_DARK, THEME_LIGHT};
+use crate::config::UserConfig;
 
 #[tauri::command]
 pub async fn get_config(_app: AppHandle) -> Result<serde_json::Value, String> {

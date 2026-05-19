@@ -2,6 +2,8 @@
 //!
 //! 使用 SQLite 存储，提供更强的查询能力。
 
+#![allow(dead_code)]
+
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
@@ -21,13 +23,9 @@ pub const KEY_SHOW_NOTES_ON_START: &str = "show_notes_on_start";
 /// 用户可配置项。
 #[derive(Clone)]
 pub struct UserConfig {
-    /// Layer 2 自定义扫描目录（绿色软件/便携版）。
     pub scan_dirs: Vec<String>,
-    /// 主题模式：THEME_DARK 或 THEME_LIGHT。
     pub theme_mode: String,
-    /// 启动时是否显示主窗口。
     pub show_main_on_start: bool,
-    /// 启动时是否显示笔记窗口。
     pub show_notes_on_start: bool,
 }
 
@@ -83,22 +81,13 @@ impl UserConfig {
         sqlite.set_setting(KEY_THEME_MODE, &self.theme_mode)?;
         sqlite.set_setting(
             KEY_SHOW_MAIN_ON_START,
-            if self.show_main_on_start {
-                "true"
-            } else {
-                "false"
-            },
+            if self.show_main_on_start { "true" } else { "false" },
         )?;
         sqlite.set_setting(
             KEY_SHOW_NOTES_ON_START,
-            if self.show_notes_on_start {
-                "true"
-            } else {
-                "false"
-            },
+            if self.show_notes_on_start { "true" } else { "false" },
         )?;
 
-        // 保存扫描目录
         let current_dirs = sqlite.get_scan_dirs().unwrap_or_default();
         for dir in &current_dirs {
             if !self.scan_dirs.contains(dir) {
@@ -131,7 +120,6 @@ impl UserConfig {
         let s = dir.to_string_lossy().to_string();
         if !self.scan_dirs.contains(&s) && dir.is_dir() {
             self.scan_dirs.push(s.clone());
-            // 立即保存
             if let Err(e) = self.save() {
                 tracing::warn!(error = %e, "保存扫描目录失败");
             }
@@ -142,7 +130,6 @@ impl UserConfig {
     pub fn remove_scan_dir(&mut self, index: usize) {
         if index < self.scan_dirs.len() {
             self.scan_dirs.remove(index);
-            // 立即保存
             if let Err(e) = self.save() {
                 tracing::warn!(error = %e, "保存扫描目录失败");
             }
