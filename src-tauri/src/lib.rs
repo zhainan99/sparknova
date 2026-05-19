@@ -29,6 +29,15 @@ use tracing::info;
 use tracing_subscriber::{fmt, EnvFilter};
 
 mod window;
+
+// Nimbus core modules
+mod paths;
+mod domain;
+mod search;
+mod indexer;
+mod storage;
+mod config;
+
 use window::{register_global_shortcuts, toggle_main_window};
 
 #[tauri::command]
