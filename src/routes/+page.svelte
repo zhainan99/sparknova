@@ -4,6 +4,19 @@
   import SearchInput from "../lib/SearchInput.svelte";
   import ResultList from "../lib/components/ResultList.svelte";
 
+  // 日志工具函数
+  const log = (prefix: string, ...args: any[]) => {
+    const timestamp = new Date().toISOString().substr(11, 12);
+    const msg = `[${timestamp}] [${prefix}]`;
+    console.log(msg, ...args);
+    // 同时写入页面上的日志区域，方便查看
+    const logEl = document.getElementById("debug-log");
+    if (logEl) {
+      logEl.textContent += msg + " " + args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(" ") + "\n";
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+  };
+
   // 动态导入 Tauri API，避免 SSR 问题
   let listen: ((event: string, callback: () => void) => Promise<() => void>) | null = null;
   let getCurrentWindow: (() => any) | null = null;
@@ -23,18 +36,17 @@
 
   const onReady = (e: CustomEvent<{ inputEl: HTMLInputElement }>) => {
     inputEl = e.detail.inputEl;
+    log("onReady", "inputEl set", !!inputEl, "renderKey:", renderKey);
   };
 
   const onInput = async (e: Event) => {
     const t = e.target as HTMLInputElement;
     query = sanitize(t.value);
 
-    // Clear previous timer
     if (debounceTimer) {
       clearTimeout(debounceTimer);
     }
 
-    // Reset selected index when query changes
     selectedIndex = 0;
 
     if (!query) {
@@ -42,7 +54,6 @@
       return;
     }
 
-    // Debounce 100ms
     debounceTimer = setTimeout(async () => {
       if (searchInputComponent) {
         results = await searchInputComponent.query(query);
@@ -99,29 +110,42 @@
   };
 
   const focusInput = async () => {
+    log("focusInput", "START", "inputEl:", !!inputEl, "renderKey:", renderKey);
+
     await tick();
     const exists = !!inputEl;
-    if (!exists) return false;
+    log("focusInput", "after tick", "exists:", exists);
+
+    if (!exists) {
+      log("focusInput", "FAIL - no inputEl");
+      return false;
+    }
 
     if (!document.hasFocus()) {
+      log("focusInput", "document doesn't have focus, calling window.focus()");
       try {
         window.focus();
         await new Promise((r) => setTimeout(r, 20));
       } catch (eWin) {
-        console.warn("focusInput: window.focus error", eWin);
+        log("focusInput", "window.focus error", eWin);
       }
     }
 
     let preventOk = false;
     let fallbackOk = false;
     try {
+      log("focusInput", "calling inputEl.focus({preventScroll:true})");
       (inputEl as any).focus({ preventScroll: true });
       preventOk = true;
+      log("focusInput", "preventScroll focus ok");
     } catch (e) {
+      log("focusInput", "preventScroll failed, trying regular focus", e);
       try {
         inputEl?.focus();
         fallbackOk = true;
+        log("focusInput", "fallback focus ok");
       } catch (e2) {
+        log("focusInput", "fallback failed", e2);
         return false;
       }
     }
@@ -129,6 +153,8 @@
     const delays = [0, 10, 50, 100, 200];
     let activeIsInput = document.activeElement === inputEl;
     let docHasFocus = document.hasFocus();
+    log("focusInput", "initial state", "activeIsInput:", activeIsInput, "docHasFocus:", docHasFocus);
+
     for (const d of delays) {
       if (activeIsInput && docHasFocus) break;
       await new Promise((r) => setTimeout(r, d));
@@ -137,20 +163,27 @@
       } catch {}
       activeIsInput = document.activeElement === inputEl;
       docHasFocus = document.hasFocus();
+      log("focusInput", `delay ${d}`, "activeIsInput:", activeIsInput, "docHasFocus:", docHasFocus);
     }
 
     const len = query.length;
     if (activeIsInput && docHasFocus) {
       try {
         inputEl!.setSelectionRange(len, len);
+        log("focusInput", "setSelectionRange ok", "len:", len);
       } catch (e3) {
-        // ignore
+        log("focusInput", "setSelectionRange error", e3);
       }
     }
-    return activeIsInput && docHasFocus;
+
+    const result = activeIsInput && docHasFocus;
+    log("focusInput", "END", "result:", result);
+    return result;
   };
 
   onMount(async () => {
+    log("onMount", "START");
+
     // 动态导入 Tauri API
     const tauriApi = await import("@tauri-apps/api/core");
     const tauriWindow = await import("@tauri-apps/api/window");
@@ -160,31 +193,51 @@
     getCurrentWindow = tauriWindow.getCurrentWindow;
     listen = tauriEvent.listen;
 
+    log("onMount", "Tauri APIs imported", "listen:", !!listen);
+
     let retries = 0;
     const tryFocus = async () => {
+      log("tryFocus", "START", "retries:", retries, "renderKey:", renderKey, "inputEl:", !!inputEl);
       const win = getCurrentWindow!();
+      log("tryFocus", "calling win.setFocus()");
       try {
         await win.setFocus();
-        setTimeout(() => {
-          win.setFocus().catch(() => {});
-        }, 50);
+        log("tryFocus", "win.setFocus() ok");
       } catch (e) {
-        // ignore
+        log("tryFocus", "win.setFocus() error", e);
       }
+      setTimeout(() => {
+        log("tryFocus", "delayed win.setFocus()");
+        win.setFocus().catch(() => {});
+      }, 50);
+
+      log("tryFocus", "calling focusInput()");
       const ok = await focusInput();
+      log("tryFocus", "focusInput result:", ok, "retries:", retries);
+
       if (!ok && retries < 5) {
         retries += 1;
+        log("tryFocus", "retrying in 75ms, retry:", retries);
         setTimeout(tryFocus, 75);
+      } else if (ok) {
+        log("tryFocus", "SUCCESS");
+      } else {
+        log("tryFocus", "GIVE UP after max retries");
       }
     };
 
     let unlisten: (() => void) | undefined;
     if (listen) {
+      log("onMount", "setting up event listener");
       unlisten = await listen("focus-search-input", async () => {
+        log("EVENT", "focus-search-input received", "renderKey before:", renderKey);
         renderKey += 1;
+        log("EVENT", "renderKey incremented to:", renderKey);
         await tick();
+        log("EVENT", "tick complete, calling tryFocus()");
         tryFocus();
       });
+      log("onMount", "event listener set up");
     }
 
     onDestroy(() => {
@@ -193,6 +246,33 @@
     });
   });
 </script>
+
+<!-- 调试日志区域 -->
+<div id="debug-log" style="
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.9);
+  color: #0f0;
+  font-family: monospace;
+  font-size: 12px;
+  padding: 10px;
+  overflow: auto;
+  z-index: 9999;
+  display: none;
+"></div>
+
+<!-- 点击任意位置隐藏日志，按 L 键显示日志 -->
+<svelte:window on:keydown={(e) => {
+  if (e.key === 'l' || e.key === 'L') {
+    const logEl = document.getElementById('debug-log');
+    if (logEl) {
+      logEl.style.display = logEl.style.display === 'none' ? 'block' : 'none';
+    }
+  }
+}} />
 
 <div class="app-container">
   <div class="search-input-container">

@@ -15,11 +15,14 @@
   }
 
   onMount(async () => {
+    console.log("[SearchInput] onMount START");
     // 动态导入 Tauri API 避免 SSR 问题
     const tauriApi = await import("@tauri-apps/api/core");
     invoke = tauriApi.invoke;
     await tick();
+    console.log("[SearchInput] onMount dispatching ready", "inputEl:", !!inputEl);
     dispatch("ready", { inputEl });
+    console.log("[SearchInput] onMount ready dispatched");
   });
 
   // 暴露一个方法，父组件可调用以将焦点置于末尾
