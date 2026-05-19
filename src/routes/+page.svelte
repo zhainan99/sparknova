@@ -1,22 +1,96 @@
 <script lang="ts">
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { invoke } from "@tauri-apps/api/core";
   import { onMount, onDestroy } from "svelte";
   import { tick } from "svelte";
   import SearchInput from "../lib/SearchInput.svelte";
+  import ResultList from "../lib/components/ResultList.svelte";
 
   let query = "";
+  let results: { name: string; path: string }[] = [];
+  let selectedIndex = 0;
   let inputEl: HTMLInputElement | null = null;
   let renderKey = 0;
+  let searchInputComponent: SearchInput;
+
+  const sanitize = (v: string) => v.replace(/[<>]/g, "").trim().slice(0, 256);
+
+  // debounce timer
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   const onReady = (e: CustomEvent<{ inputEl: HTMLInputElement }>) => {
     inputEl = e.detail.inputEl;
   };
 
-  const sanitize = (v: string) => v.replace(/[<>]/g, "").trim().slice(0, 256);
-  const onInput = (e: Event) => {
+  const onInput = async (e: Event) => {
     const t = e.target as HTMLInputElement;
     query = sanitize(t.value);
+
+    // Clear previous timer
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+
+    // Reset selected index when query changes
+    selectedIndex = 0;
+
+    if (!query) {
+      results = [];
+      return;
+    }
+
+    // Debounce 100ms
+    debounceTimer = setTimeout(async () => {
+      if (searchInputComponent) {
+        results = await searchInputComponent.query(query);
+        selectedIndex = 0;
+      }
+    }, 100);
+  };
+
+  // Keyboard navigation
+  const onNav = (e: CustomEvent<{ direction: "up" | "down" }>) => {
+    const { direction } = e.detail;
+    if (results.length === 0) return;
+
+    if (direction === "down") {
+      selectedIndex = Math.min(selectedIndex + 1, results.length - 1);
+    } else {
+      selectedIndex = Math.max(selectedIndex - 1, 0);
+    }
+  };
+
+  // Activate selected item on Enter
+  const onActivate = async () => {
+    if (results.length === 0 || selectedIndex < 0) return;
+
+    const selected = results[selectedIndex];
+    if (selected) {
+      try {
+        await invoke("activate", { path: selected.path });
+      } catch (e) {
+        console.error("activate error:", e);
+      }
+    }
+  };
+
+  // Handle result item click
+  const onSelect = async (e: CustomEvent<{ index: number }>) => {
+    selectedIndex = e.detail.index;
+    const selected = results[selectedIndex];
+    if (selected) {
+      try {
+        await invoke("activate", { path: selected.path });
+      } catch (e) {
+        console.error("activate error:", e);
+      }
+    }
+  };
+
+  // Handle mouse hover on result items
+  const onHover = (e: CustomEvent<{ index: number }>) => {
+    selectedIndex = e.detail.index;
   };
 
   const focusInput = async () => {
@@ -145,6 +219,9 @@
           console.warn("listen: unsubscribe error", e);
         }
       }
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
     });
   });
 </script>
@@ -153,12 +230,21 @@
   <div class="search-input-container">
     {#key renderKey}
       <SearchInput
+        bind:this={searchInputComponent}
         bind:value={query}
         on:input={onInput}
         on:ready={onReady}
+        on:nav={onNav}
+        on:activate={onActivate}
         placeholder="输入命令或搜索..."
       />
     {/key}
+    <ResultList
+      {results}
+      {selectedIndex}
+      on:select={onSelect}
+      on:hover={onHover}
+    />
   </div>
 </div>
 
