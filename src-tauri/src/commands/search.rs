@@ -3,7 +3,7 @@ use tauri::{AppHandle, Manager};
 
 pub struct SearchState {
     engine: RwLock<Option<Arc<crate::search::SearchEngine>>>,
-    frequency_cache: RwLock<std::collections::HashMap<String, u32>>,
+    pub frequency_cache: RwLock<std::collections::HashMap<String, u32>>,
 }
 
 impl SearchState {
