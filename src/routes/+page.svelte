@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { listen } from "@tauri-apps/api/event";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { invoke } from "@tauri-apps/api/core";
   import { onMount, onDestroy } from "svelte";
   import { tick } from "svelte";
   import SearchInput from "../lib/SearchInput.svelte";
   import ResultList from "../lib/components/ResultList.svelte";
+
+  // 动态导入 Tauri API，避免 SSR 问题
+  let listen: ((event: string, callback: () => void) => Promise<() => void>) | null = null;
+  let getCurrentWindow: (() => any) | null = null;
+  let invoke: ((cmd: string, args?: any) => Promise<any>) | null = null;
 
   let query = "";
   let results: { name: string; path: string }[] = [];
@@ -64,6 +66,7 @@
   // Activate selected item on Enter
   const onActivate = async () => {
     if (results.length === 0 || selectedIndex < 0) return;
+    if (!invoke) return;
 
     const selected = results[selectedIndex];
     if (selected) {
@@ -78,6 +81,8 @@
   // Handle result item click
   const onSelect = async (e: CustomEvent<{ index: number }>) => {
     selectedIndex = e.detail.index;
+    if (!invoke) return;
+
     const selected = results[selectedIndex];
     if (selected) {
       try {
@@ -96,7 +101,6 @@
   const focusInput = async () => {
     await tick();
     const exists = !!inputEl;
-    console.log("focusInput:start", { exists });
     if (!exists) return false;
 
     if (!document.hasFocus()) {
@@ -114,12 +118,10 @@
       (inputEl as any).focus({ preventScroll: true });
       preventOk = true;
     } catch (e) {
-      console.warn("focusInput:preventScroll error", e);
       try {
         inputEl?.focus();
         fallbackOk = true;
       } catch (e2) {
-        console.error("focusInput:fallback error", e2);
         return false;
       }
     }
@@ -135,93 +137,59 @@
       } catch {}
       activeIsInput = document.activeElement === inputEl;
       docHasFocus = document.hasFocus();
-      console.log("focusInput:retry", { d, activeIsInput, docHasFocus });
     }
 
     const len = query.length;
-    let selectionOk = false;
     if (activeIsInput && docHasFocus) {
       try {
         inputEl!.setSelectionRange(len, len);
-        selectionOk = true;
-        console.log("focusInput:setSelectionRange", { len, selectionOk });
       } catch (e3) {
-        console.warn("focusInput:setSelectionRange error", e3);
+        // ignore
       }
     }
-
-    console.log("focusInput:end", {
-      preventOk,
-      fallbackOk,
-      activeIsInput,
-      docHasFocus,
-      selectionOk,
-    });
     return activeIsInput && docHasFocus;
   };
 
-  onMount(() => {
+  onMount(async () => {
+    // 动态导入 Tauri API
+    const tauriApi = await import("@tauri-apps/api/core");
+    const tauriWindow = await import("@tauri-apps/api/window");
+    const tauriEvent = await import("@tauri-apps/api/event");
+
+    invoke = tauriApi.invoke;
+    getCurrentWindow = tauriWindow.getCurrentWindow;
+    listen = tauriEvent.listen;
+
     let retries = 0;
     const tryFocus = async () => {
-      console.log("tryFocus:start", { retries });
-      const win = getCurrentWindow();
-      try {
-        const visible = await win.isVisible();
-        console.log("tryFocus:window visibility", { visible });
-      } catch (eVis) {
-        console.warn("tryFocus:isVisible error", eVis);
-      }
+      const win = getCurrentWindow!();
       try {
         await win.setFocus();
         setTimeout(() => {
-          win
-            .setFocus()
-            .catch((e2) => console.warn("tryFocus:setFocus second error", e2));
+          win.setFocus().catch(() => {});
         }, 50);
-        console.log("tryFocus:setFocus ok");
       } catch (e) {
-        console.warn("tryFocus:setFocus error", e);
+        // ignore
       }
       const ok = await focusInput();
-      console.log("tryFocus:result", { ok });
       if (!ok && retries < 5) {
         retries += 1;
-        console.log("tryFocus:retry", { retries });
         setTimeout(tryFocus, 75);
       }
     };
 
     let unlisten: (() => void) | undefined;
-    const isTauriEnv =
-      typeof window !== "undefined" && (window as any).__TAURI_INTERNALS__;
-    if (isTauriEnv) {
-      listen("focus-search-input", async () => {
-        console.log("listen: focus-search-input received");
+    if (listen) {
+      unlisten = await listen("focus-search-input", async () => {
         renderKey += 1;
         await tick();
         tryFocus();
-      })
-        .then((u) => {
-          unlisten = u;
-          console.log("listen: subscribed focus-search-input");
-        })
-        .catch((e) => {
-          console.error("listen: subscribe error", e);
-        });
+      });
     }
 
     onDestroy(() => {
-      if (unlisten) {
-        try {
-          unlisten();
-          console.log("listen: unsubscribed focus-search-input");
-        } catch (e) {
-          console.warn("listen: unsubscribe error", e);
-        }
-      }
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-      }
+      if (unlisten) unlisten();
+      if (debounceTimer) clearTimeout(debounceTimer);
     });
   });
 </script>

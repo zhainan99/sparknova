@@ -402,9 +402,9 @@ pub fn register_global_shortcuts(app: &App) -> tauri::Result<()> {
     }
 
     #[cfg(target_os = "macos")]
-    let shortcuts = ["cmd+shift+s"];
+    let shortcuts = ["cmd+alt+f"];
     #[cfg(not(target_os = "macos"))]
-    let shortcuts = ["ctrl+shift+s"];
+    let shortcuts = ["ctrl+alt+f"];
 
     info!("Registering global shortcuts: {:?}", shortcuts);
 

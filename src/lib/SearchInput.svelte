@@ -1,13 +1,13 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from "svelte";
   import { tick } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
 
   export let value: string = "";
   export let placeholder: string = "输入命令或搜索...";
 
   const dispatch = createEventDispatcher();
   let inputEl: HTMLInputElement;
+  let invoke: ((cmd: string, args?: any) => Promise<any>) | null = null;
 
   interface ResultItem {
     name: string;
@@ -15,6 +15,9 @@
   }
 
   onMount(async () => {
+    // 动态导入 Tauri API 避免 SSR 问题
+    const tauriApi = await import("@tauri-apps/api/core");
+    invoke = tauriApi.invoke;
     await tick();
     dispatch("ready", { inputEl });
   });
@@ -50,6 +53,7 @@
 
   // 调用 Rust query 命令获取搜索结果
   export async function query(q: string): Promise<ResultItem[]> {
+    if (!invoke) return [];
     try {
       const results = await invoke<ResultItem[]>("query", { q });
       return results;

@@ -32,6 +32,11 @@ mod window;
 
 // Nimbus core modules
 mod commands;
+// Re-export Tauri commands
+pub use commands::activate::activate;
+pub use commands::config::{get_config, save_config};
+pub use commands::notes::{list_notes, create_note, delete_note};
+pub use commands::search::{query, hide_window, SearchState};
 
 mod paths;
 mod domain;
