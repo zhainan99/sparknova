@@ -1,22 +1,45 @@
 use std::sync::{Arc, RwLock};
+use std::collections::HashMap;
 use tauri::{AppHandle, Manager};
 
 pub struct SearchState {
     engine: RwLock<Option<Arc<crate::search::SearchEngine>>>,
-    pub frequency_cache: RwLock<std::collections::HashMap<String, u32>>,
+    pub frequency_cache: RwLock<HashMap<String, u32>>,
+    storage: Arc<crate::storage::Storage>,
 }
 
 impl SearchState {
-    pub fn new() -> Self {
+    pub fn new(storage: Arc<crate::storage::Storage>) -> Self {
+        // 从 redb 加载已有频次数据
+        let frequency_cache = storage.frequency()
+            .get_all()
+            .unwrap_or_default()
+            .into_iter()
+            .collect::<HashMap<String, u32>>();
+        
         Self {
             engine: RwLock::new(None),
-            frequency_cache: RwLock::new(std::collections::HashMap::new()),
+            frequency_cache: RwLock::new(frequency_cache),
+            storage,
         }
     }
 
-    pub fn init(&self, engine: Arc<crate::search::SearchEngine>, frequency_cache: std::collections::HashMap<String, u32>) {
+    pub fn init(&self, engine: Arc<crate::search::SearchEngine>) {
         *self.engine.write().unwrap() = Some(engine);
-        *self.frequency_cache.write().unwrap() = frequency_cache;
+    }
+    
+    /// 更新频次并持久化
+    pub fn record_launch(&self, path: &str) {
+        let mut cache = self.frequency_cache.write().unwrap();
+        let count = cache.get(path).copied().unwrap_or(0);
+        cache.insert(path.to_string(), count + 1);
+        
+        // 异步保存到 redb
+        let storage = self.storage.clone();
+        let path_owned = path.to_string();
+        let _ = std::thread::spawn(move || {
+            let _ = storage.frequency().record_launch(&path_owned);
+        });
     }
 }
 
@@ -48,16 +71,16 @@ pub async fn hide_window(app: AppHandle) -> Result<(), String> {
 }
 
 pub fn register(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    app.manage(SearchState::new());
+    let storage = Arc::new(crate::storage::Storage::open().map_err(|e| e.to_string())?);
+    let state = SearchState::new(storage.clone());
+    app.manage(state);
 
     // 初始化搜索引擎
-    let storage = Arc::new(crate::storage::Storage::open().map_err(|e| e.to_string())?);
     let apps = storage.index_cache().load().map_err(|e| e.to_string())?;
     let engine = Arc::new(crate::search::SearchEngine::new(apps));
-    let frequency_cache = std::collections::HashMap::new();
 
     let state = app.state::<SearchState>();
-    state.init(engine, frequency_cache);
+    state.init(engine);
 
     Ok(())
 }

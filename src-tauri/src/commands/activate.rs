@@ -5,26 +5,33 @@ use tauri::{AppHandle, Manager};
 #[tauri::command]
 pub async fn activate(app: AppHandle, path: String) -> Result<(), String> {
     let path = PathBuf::from(&path);
+    
+    // 先隐藏窗口（无论启动成功与否都隐藏）
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+
+    // 检查路径是否存在
+    if !path.exists() {
+        return Err(format!("路径不存在: {}", path.display()));
+    }
+    
+    // 检查是否是 exe 文件
+    if !path.extension().map_or(false, |e| e.eq_ignore_ascii_case("exe")) {
+        return Err(format!("不是可执行文件: {}", path.display()));
+    }
 
     // 启动进程
     let mut cmd = Command::new(&path);
     if let Some(cwd) = path.parent() {
         cmd.current_dir(cwd);
     }
-    cmd.spawn().map_err(|e| e.to_string())?;
+    cmd.spawn().map_err(|e| format!("启动失败: {}", e))?;
 
-    // Layer 3 "用过即学" 逻辑：更新频次缓存
+    // 更新频次
     let state = app.state::<crate::commands::search::SearchState>();
     if let Some(ref path_str) = path.to_str() {
-        let mut freq_cache = state.frequency_cache.write().unwrap();
-        let key = path_str.to_string();
-        let count = freq_cache.get(&key).copied().unwrap_or(0);
-        freq_cache.insert(key, count + 1);
-    }
-
-    // 隐藏窗口
-    if let Some(window) = app.get_webview_window("main") {
-        window.hide().map_err(|e| e.to_string())?;
+        state.record_launch(path_str);
     }
 
     Ok(())

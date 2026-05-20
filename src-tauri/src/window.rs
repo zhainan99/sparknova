@@ -402,9 +402,9 @@ pub fn register_global_shortcuts(app: &App) -> tauri::Result<()> {
     }
 
     #[cfg(target_os = "macos")]
-    let shortcuts = ["cmd+alt+f"];
+    let shortcuts = ["cmd+alt+f", "escape"];
     #[cfg(not(target_os = "macos"))]
-    let shortcuts = ["ctrl+alt+f"];
+    let shortcuts = ["ctrl+alt+f", "escape"];
 
     info!("Registering global shortcuts: {:?}", shortcuts);
 
@@ -420,10 +420,19 @@ pub fn register_global_shortcuts(app: &App) -> tauri::Result<()> {
 
                 // 只处理按下事件
                 if event.state == ShortcutState::Pressed {
-                    info!("Shortcut pressed: {}", shortcut);
-
-                    // 调用toggle_main_window函数（已简化）
-                    toggle_main_window(&app);
+                    let shortcut_str = shortcut.to_string().to_lowercase();
+                    if shortcut_str == "escape" {
+                        // 只在窗口可见时才隐藏
+                        if let Some(window) = get_main_window(&app) {
+                            if window.is_visible().unwrap_or(false) {
+                                info!("Shortcut pressed: escape, hiding window");
+                                hide_main_window(&app);
+                            }
+                        }
+                    } else {
+                        info!("Shortcut pressed: {}", shortcut);
+                        toggle_main_window(&app);
+                    }
                 }
             });
 
