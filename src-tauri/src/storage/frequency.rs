@@ -119,7 +119,7 @@ mod tests {
     /// 创建临时数据库，返回 (store, temp_dir)。
     fn temp_db() -> (FrequencyStore, std::path::PathBuf) {
         let temp_dir = std::env::temp_dir().join(format!(
-            "nimbus_freq_test_{:?}_{:?}",
+            "sparknova_freq_test_{:?}_{:?}",
             std::thread::current().id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

@@ -2,7 +2,7 @@ use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
 use std::thread;
 use tauri::{AppHandle, Manager};
-use tracing::info;
+use tracing::{info, warn};
 
 pub struct SearchState {
     engine: Arc<RwLock<Option<Arc<crate::search::SearchEngine>>>>,
@@ -48,7 +48,65 @@ impl SearchState {
                     info!("搜索索引加载完成");
                 }
                 Err(e) => {
-                    tracing::warn!("加载搜索索引失败: {:?}", e);
+                    warn!("加载搜索索引失败: {:?}", e);
+                }
+            }
+        });
+    }
+    
+    /// 触发增量扫描（如果在 show_main_window 中调用）
+    /// 检查是否需要更新索引，如果需要则执行扫描并更新搜索引擎
+    pub fn trigger_incremental_scan(&self) {
+        let cache = self.storage.index_cache();
+        
+        // 检查是否需要扫描
+        let needs = match cache.needs_scan() {
+            Ok(v) => v,
+            Err(e) => {
+                warn!("检查扫描状态失败: {:?}", e);
+                return;
+            }
+        };
+        
+        info!(needs_scan = needs, "增量扫描检查结果");
+        
+        if !needs {
+            return;
+        }
+        
+        info!("触发增量索引更新...");
+        let state = self.clone();
+        let storage = self.storage.clone();
+            
+        thread::spawn(move || {
+            let cache = storage.index_cache();
+            
+            // 执行扫描
+            match crate::indexer::scan_start_menu() {
+                Ok(report) => {
+                    info!("扫描到 {} 个应用", report.entries.len());
+                    
+                    // 合并到缓存
+                    match cache.merge_new_entries(&report.entries) {
+                        Ok(merged) => {
+                            // 更新搜索引擎
+                            let new_engine = Arc::new(crate::search::SearchEngine::new(merged));
+                            *state.engine.write().unwrap() = Some(new_engine);
+                            
+                            // 更新扫描时间
+                            let _ = cache.set_last_scan_time(
+                                crate::storage::IndexCache::current_timestamp()
+                            );
+                            
+                            info!("增量索引更新完成");
+                        }
+                        Err(e) => {
+                            warn!("合并索引失败: {:?}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("扫描应用失败: {:?}", e);
                 }
             }
         });

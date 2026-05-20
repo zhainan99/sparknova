@@ -124,14 +124,13 @@ impl Storage {
 
 /// 获取 redb 数据库文件路径。
 fn get_redb_path() -> Result<std::path::PathBuf> {
-    let nimbus_dir = app_data_dir();
-    std::fs::create_dir_all(&nimbus_dir)?;
-    Ok(nimbus_dir.join("nimbus_index.db"))
+    let sparknova_dir = app_data_dir();
+    std::fs::create_dir_all(&sparknova_dir)?;
+    Ok(sparknova_dir.join("sparknova.db"))
 }
 
 /// 获取 SQLite 数据库文件路径（在 sqlite_db.rs 中定义，这里仅用于说明）
-/// 注意：SQLite 使用 nimbus.db（和 redb 分离）
-const _: &str = "SQLite 数据库路径: {app_data_dir}/nimbus.db";
+const _: &str = "SQLite 数据库路径: {app_data_dir}/sparknova_sqlite.db";
 
 #[cfg(test)]
 mod tests {
@@ -140,8 +139,8 @@ mod tests {
 
     fn temp_storage() -> (Storage, std::path::PathBuf) {
         let temp_dir = std::env::temp_dir().join(format!(
-            "nimbus_test_{:?}_{:?}",
-            std::thread::current::id(),
+            "sparknova_test_{:?}_{:?}",
+            std::thread::current().id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()

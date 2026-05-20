@@ -213,6 +213,11 @@ pub fn show_main_window(app: &AppHandle) -> bool {
         let is_focused = window.is_focused().unwrap_or(false);
         info!("Window focused after show: {}", is_focused);
 
+        // 触发增量索引扫描
+        if let Some(state) = app.try_state::<crate::commands::search::SearchState>() {
+            state.trigger_incremental_scan();
+        }
+
         is_visible && is_focused
     } else {
         warn!("Main window not found");

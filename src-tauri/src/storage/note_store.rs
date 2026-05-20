@@ -69,8 +69,8 @@ mod tests {
 
     fn temp_db() -> (NoteStore, std::path::PathBuf) {
         let temp_dir = std::env::temp_dir().join(format!(
-            "nimbus_note_test_{:?}_{:?}",
-            std::thread::current::id(),
+            "sparknova_note_test_{:?}_{:?}",
+            std::thread::current().id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()

@@ -335,9 +335,9 @@ impl SqliteDb {
 
 /// 获取 SQLite 数据库文件路径。
 fn get_db_path() -> Result<PathBuf> {
-    let nimbus_dir = app_data_dir();
-    std::fs::create_dir_all(&nimbus_dir)?;
-    Ok(nimbus_dir.join("nimbus.db"))
+    let sparknova_dir = app_data_dir();
+    std::fs::create_dir_all(&sparknova_dir)?;
+    Ok(sparknova_dir.join("sparknova_sqlite.db"))
 }
 
 #[cfg(test)]
@@ -347,7 +347,7 @@ mod tests {
 
     fn temp_db() -> (SqliteDb, std::path::PathBuf) {
         let temp_dir = std::env::temp_dir().join(format!(
-            "nimbus_sqlite_test_{:?}_{:?}",
+            "sparknova_sqlite_test_{:?}_{:?}",
             std::thread::current().id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

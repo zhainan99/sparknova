@@ -190,7 +190,7 @@ mod tests {
     fn test_add_scan_dir() {
         let mut config = UserConfig::default();
         let temp_dir = std::env::temp_dir().join(format!(
-            "nimbus_config_test_{:?}",
+            "sparknova_config_test_{:?}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
