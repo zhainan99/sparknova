@@ -1,13 +1,14 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from "svelte";
   import { tick } from "svelte";
+  import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 
   export let value: string = "";
   export let placeholder: string = "输入命令或搜索...";
 
   const dispatch = createEventDispatcher();
   let inputEl: HTMLInputElement;
-  let invoke: ((cmd: string, args?: any) => Promise<any>) | null = null;
+  let invoke: typeof tauriInvoke | undefined = undefined;
 
   interface ResultItem {
     name: string;
@@ -16,13 +17,16 @@
 
   onMount(async () => {
     // 动态导入 Tauri API 避免 SSR 问题
-    const tauriApi = await import("@tauri-apps/api/core");
-    invoke = tauriApi.invoke;
+    invoke = tauriInvoke;
     await tick();
     dispatch("ready", { inputEl });
   });
 
-  // 暴露一个方法，父组件可调用以将焦点置于末尾
+  // 暴露方法供父组件调用
+  export function doFocus() {
+    inputEl?.focus();
+  }
+
   export function focusToEnd(len: number) {
     try {
       inputEl?.focus({ preventScroll: true });

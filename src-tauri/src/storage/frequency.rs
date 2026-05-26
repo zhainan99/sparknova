@@ -16,12 +16,12 @@ const FREQUENCY: TableDefinition<&str, u32> = TableDefinition::new("frequency");
 /// 频次存储访问器。
 ///
 /// 使用 `Arc<Database>` 共享数据库引用，避免悬垂指针。
-#[allow(dead_code)] // v0.2 使用历史展示页面接入后移除
+// TODO(v0.2): 使用历史展示页面接入后移除
 pub struct FrequencyStore {
     db: Arc<Database>,
 }
 
-#[allow(dead_code)] // v0.2 使用历史展示页面接入后移除
+// TODO(v0.2): 使用历史展示页面接入后移除
 impl FrequencyStore {
     /// 创建新的频次存储访问器。
     pub fn new(db: Arc<Database>) -> Self {

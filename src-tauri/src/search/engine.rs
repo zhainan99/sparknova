@@ -61,34 +61,24 @@ impl SearchEngine {
 
     /// 索引里的应用数量（日志/诊断用）。
     pub fn len(&self) -> usize {
-        self.apps.read().unwrap_or_else(|e| e.into_inner()).len()
+        self.apps.read().unwrap().len()
     }
 
     /// 索引是否为空。
     #[allow(dead_code)] // 诊断/断言用；v0.3 Layer 3 增长后可能移除
     pub fn is_empty(&self) -> bool {
-        self.apps
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .is_empty()
+        self.apps.read().unwrap().is_empty()
     }
 
     /// 运行时动态添加条目（Layer 3 "用过即学"）。
     pub fn add(&self, entry: AppEntry) {
         let fields = compute_fields(&entry);
-        self.apps
-            .write()
-            .unwrap_or_else(|e| e.into_inner())
-            .push((entry, fields));
+        self.apps.write().unwrap().push((entry, fields));
     }
 
     /// 检查索引中是否已有指定路径的条目。
     pub fn contains_path(&self, path: &Path) -> bool {
-        self.apps
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .iter()
-            .any(|(app, _)| app.path == path)
+        self.apps.read().unwrap().iter().any(|(app, _)| app.path == path)
     }
 
     /// 按 query 匹配应用名，返回前 `limit` 条结果。
@@ -118,7 +108,7 @@ impl SearchEngine {
             (None, None)
         };
 
-        let apps = self.apps.read().unwrap_or_else(|e| e.into_inner());
+        let apps = self.apps.read().unwrap();
         let mut matches: Vec<(AppEntry, u32)> = apps
             .iter()
             .filter_map(|(app, fields)| {

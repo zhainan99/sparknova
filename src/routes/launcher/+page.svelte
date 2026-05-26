@@ -4,6 +4,7 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import SearchInput from "$lib/SearchInput.svelte";
   import ResultList from "$lib/components/ResultList.svelte";
+  import { sanitize } from "$lib/utils";
 
   let query = "";
   let results: { name: string; path: string }[] = [];
@@ -11,21 +12,15 @@
   let searchInputComponent: SearchInput;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const sanitize = (v: string) => v.replace(/[<>]/g, "").trim().slice(0, 256);
-
-  const onInput = async (e: Event) => {
-    const t = e.target as HTMLInputElement;
-    if (!t) return;
-    query = sanitize(t.value);
-
+  const onInput = async () => {
+    const sanitized = sanitize(query);
     if (debounceTimer) clearTimeout(debounceTimer);
     selectedIndex = 0;
-    if (!query) { results = []; return; }
+    if (!sanitized) { results = []; return; }
 
     debounceTimer = setTimeout(async () => {
       if (searchInputComponent) {
-        results = await searchInputComponent.query(query);
-        selectedIndex = 0;
+        results = await searchInputComponent.query(sanitized);
       }
     }, 100);
   };
@@ -53,14 +48,7 @@
 
   const onSelect = async (e: CustomEvent<{ index: number }>) => {
     selectedIndex = e.detail.index;
-    const selected = results[selectedIndex];
-    if (selected) {
-      try {
-        await invoke("activate", { path: selected.path });
-      } catch (e) {
-        console.error("activate error:", e);
-      }
-    }
+    await onActivate();
   };
 
   const onHover = (e: CustomEvent<{ index: number }>) => {

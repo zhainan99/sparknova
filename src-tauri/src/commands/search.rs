@@ -80,33 +80,39 @@ impl SearchState {
             
         thread::spawn(move || {
             let cache = storage.index_cache();
-            
-            // 执行扫描
-            match crate::indexer::scan_start_menu() {
-                Ok(report) => {
-                    info!("扫描到 {} 个应用", report.entries.len());
-                    
-                    // 合并到缓存
-                    match cache.merge_new_entries(&report.entries) {
-                        Ok(merged) => {
-                            // 更新搜索引擎
-                            let new_engine = Arc::new(crate::search::SearchEngine::new(merged));
-                            *state.engine.write().unwrap() = Some(new_engine);
-                            
-                            // 更新扫描时间
-                            let _ = cache.set_last_scan_time(
-                                crate::storage::IndexCache::current_timestamp()
-                            );
-                            
-                            info!("增量索引更新完成");
-                        }
-                        Err(e) => {
-                            warn!("合并索引失败: {:?}", e);
-                        }
-                    }
+
+            // 执行扫描（catch_unwind 防止 panic 导致索引状态不一致）
+            let scan_result = std::panic::catch_unwind(|| crate::indexer::scan_start_menu());
+            let report = match scan_result {
+                Ok(Ok(report)) => report,
+                Ok(Err(e)) => {
+                    warn!("扫描应用失败: {:?}", e);
+                    return;
                 }
                 Err(e) => {
-                    warn!("扫描应用失败: {:?}", e);
+                    warn!("扫描应用 panic: {:?}", e);
+                    return;
+                }
+            };
+
+            info!("扫描到 {} 个应用", report.entries.len());
+
+            // 合并到缓存
+            match cache.merge_new_entries(&report.entries) {
+                Ok(merged) => {
+                    // 更新搜索引擎
+                    let new_engine = Arc::new(crate::search::SearchEngine::new(merged));
+                    *state.engine.write().unwrap() = Some(new_engine);
+
+                    // 更新扫描时间
+                    let _ = cache.set_last_scan_time(
+                        crate::storage::IndexCache::current_timestamp()
+                    );
+
+                    info!("增量索引更新完成");
+                }
+                Err(e) => {
+                    warn!("合并索引失败: {:?}", e);
                 }
             }
         });

@@ -2,16 +2,13 @@
 
 #![allow(dead_code)]
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use lnk::ShellLink;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 use tracing::{debug, info};
 
 use crate::domain::{AppEntry, AppSource};
-
-/// 开始菜单相对子路径，同时适用于 APPDATA（用户级）和 PROGRAMDATA（系统级）。
-const START_MENU_SUBDIR: &str = r"Microsoft\Windows\Start Menu\Programs";
 
 /// 单次扫描结果与统计。字段为 pub 供调用方日志化；后续 search 引擎取 `entries`。
 #[derive(Debug, Default)]
@@ -51,9 +48,6 @@ fn start_menu_roots() -> Vec<PathBuf> {
     // 用户级开始菜单
     if let Some(apdata) = env::var_os("APPDATA") {
         let user_root = PathBuf::from(apdata)
-            .join(START_MENU_SUBDIR)
-            .join("..")
-            .join("..")
             .join("Microsoft")
             .join("Windows")
             .join("Start Menu")
@@ -102,14 +96,26 @@ fn scan_dir(dir: &Path, report: &mut ScanReport) {
 }
 
 fn parse_lnk(lnk_path: &Path) -> Result<Option<AppEntry>> {
-    let shell_link = ShellLink::open(lnk_path, lnk::encoding::UTF_16LE).context("打开 lnk 文件失败")?;
+    let shell_link = match ShellLink::open(lnk_path, lnk::encoding::UTF_16LE) {
+        Ok(sl) => sl,
+        Err(e) => {
+            // 大量 lnk 文件解析失败是正常的（网络路径、特殊快捷方式等），仅 debug
+            debug!(lnk_path = ?lnk_path, error = %e, "打开 lnk 文件失败");
+            return Ok(None);
+        }
+    };
 
     let target = if let Some(ref info) = shell_link.link_info() {
         match info.local_base_path() {
             Some(t) => t.to_string(),
-            None => return Ok(None),
+            None => {
+                // 大部分快捷方式没有 local_base_path 是正常的
+                debug!(lnk_path = ?lnk_path, "lnk 文件无 local_base_path");
+                return Ok(None);
+            }
         }
     } else {
+        debug!(lnk_path = ?lnk_path, "lnk 文件无 link_info");
         return Ok(None);
     };
 
@@ -117,6 +123,7 @@ fn parse_lnk(lnk_path: &Path) -> Result<Option<AppEntry>> {
 
     // 必须是 .exe 文件
     if !is_exe(&target_path) {
+        debug!(lnk_path = ?lnk_path, target_path = ?target_path, "lnk 目标不是 exe");
         return Ok(None);
     }
 

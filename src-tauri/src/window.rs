@@ -88,9 +88,6 @@ impl WindowController {
 pub fn get_main_window(app: &AppHandle) -> Option<WebviewWindow> {
     let window = app.get_webview_window("main");
     debug!("Get main window result: {}", window.is_some());
-    let windows = app.windows();
-    debug!("All windows: {:?}", windows.keys());
-
     window
 }
 
@@ -285,7 +282,6 @@ pub fn toggle_main_window(app: &AppHandle) {
 /// ```
 pub fn init_window_events(app_handle: &AppHandle, _ctrl: State<WindowController>) {
     let app = app_handle.clone();
-    // 使用共享状态，避免深拷贝造成状态不一致
 
     // 初始隐藏主窗口并设置初始大小
     if let Some(window) = get_main_window(&app_handle) {
@@ -310,8 +306,10 @@ pub fn init_window_events(app_handle: &AppHandle, _ctrl: State<WindowController>
 
         let _ = window.hide();
 
-        // 在闭包外克隆窗口
+        // 在闭包外克隆窗口（需要多克隆一份供快捷键监听器使用）
         let window_clone = window.clone();
+        let window_for_shortcuts = window.clone();
+        let app_clone2 = app.clone();
 
         // 监听窗口事件
         window.on_window_event(move |event| {
@@ -388,6 +386,31 @@ pub fn init_window_events(app_handle: &AppHandle, _ctrl: State<WindowController>
                 _ => {}
             }
         });
+
+        // 注册快捷键事件监听器，处理来自全局快捷键回调的事件
+        let app_for_shortcuts = app_clone2.clone();
+        tauri::async_runtime::spawn(async move {
+            use tauri::{Event, Listener};
+
+            let app_handle = app_for_shortcuts.clone();
+            let win = window_for_shortcuts.clone();
+
+            let _ = win.listen("shortcut-escape", move |_event: Event| {
+                info!("Shortcut escape event received");
+                if let Some(window) = get_main_window(&app_handle) {
+                    if window.is_visible().unwrap_or(false) {
+                        hide_main_window(&app_handle);
+                    }
+                }
+            });
+
+            let app_handle2 = app_for_shortcuts.clone();
+            let win2 = window_for_shortcuts.clone();
+            let _ = win2.listen("shortcut-toggle", move |_event: Event| {
+                info!("Shortcut toggle event received");
+                toggle_main_window(&app_handle2);
+            });
+        });
     } else {
         warn!("Main window not found for event initialization");
     }
@@ -426,17 +449,12 @@ pub fn register_global_shortcuts(app: &App) -> tauri::Result<()> {
                 // 只处理按下事件
                 if event.state == ShortcutState::Pressed {
                     let shortcut_str = shortcut.to_string().to_lowercase();
+                    let app_clone = app.clone();
                     if shortcut_str == "escape" {
-                        // 只在窗口可见时才隐藏
-                        if let Some(window) = get_main_window(&app) {
-                            if window.is_visible().unwrap_or(false) {
-                                info!("Shortcut pressed: escape, hiding window");
-                                hide_main_window(&app);
-                            }
-                        }
+                        // 通过事件将隐藏操作发送到主线程，避免线程安全问题
+                        let _ = tauri::Emitter::emit_to(&app_clone, "main", "shortcut-escape", ());
                     } else {
-                        info!("Shortcut pressed: {}", shortcut);
-                        toggle_main_window(&app);
+                        let _ = tauri::Emitter::emit_to(&app_clone, "main", "shortcut-toggle", ());
                     }
                 }
             });

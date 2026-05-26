@@ -44,8 +44,10 @@ mod search;
 mod indexer;
 mod storage;
 mod config;
+mod tray;
 
-use window::{register_global_shortcuts, toggle_main_window};
+use window::{register_global_shortcuts, toggle_main_window, init_window_events, WindowController};
+use tray::init_tray;
 
 #[tauri::command]
 fn open_or_focus_main_window(app: AppHandle) {
@@ -56,11 +58,17 @@ fn open_or_focus_main_window(app: AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::Builder::default().build())
-        .invoke_handler(tauri::generate_handler![open_or_focus_main_window])
+        .invoke_handler(tauri::generate_handler![
+            open_or_focus_main_window,
+            commands::search::query,
+            commands::search::hide_window
+        ])
         .setup(|app: &mut App| {
             let _ = fmt()
                 .with_env_filter(
-                    EnvFilter::from_default_env().add_directive("info".parse().unwrap()),
+                    EnvFilter::from_default_env()
+                        .add_directive("info".parse().unwrap())
+                        .add_directive("sparknova::indexer=debug".parse().unwrap())
                 )
                 .with_target(false)
                 .compact()
@@ -68,8 +76,19 @@ pub fn run() {
             info!("Registering global shortcuts...");
             register_global_shortcuts(app)?;
 
+            // 注册窗口控制器状态
+            app.manage(WindowController::new());
+
             // 注册搜索命令
             commands::search::register(app)?;
+
+            // 初始化窗口事件和快捷键监听器
+            let app_handle = app.handle().clone();
+            let ctrl = app.state::<WindowController>();
+            init_window_events(&app_handle, ctrl);
+
+            // 初始化系统托盘
+            init_tray(app)?;
 
             #[cfg(debug_assertions)]
             {
